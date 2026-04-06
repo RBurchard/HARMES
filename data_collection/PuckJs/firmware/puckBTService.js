@@ -54,7 +54,7 @@ function updateTimestamp() {
   } 
 }
 
-function readBME() {  // kvl, read single package & output to console
+function readBME() {  // read single package & output to console (if console is connected)
   bme.readRawData();
   var temp_cal = bme.calibration_T(bme.temp_raw);
   var press_cal = bme.calibration_P(bme.pres_raw);
@@ -163,7 +163,7 @@ function readBeacon() {
   if (!connected) return;
   var rssi = 0;
   NRF.findDevices(function(devs) {
-    for (var ind in devs) { // not working yet, need a different loop type
+    for (var ind in devs) {
       var dev = devs[ind];
       if (dev.manufacturer == 0x0590 && dev.manufacturerData == 0x69) {
         rssi = dev.rssi;
