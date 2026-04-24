@@ -84,12 +84,12 @@ def handle_split_recordings(rec1, rec2):
     label_df2 = pd.read_csv(get_labels(rec2))
     task_list = pd.read_csv(glob(rec1 + "/*TASKLIST.csv")[0])
 
-    # Find the checkpoint, at which the split happened, by looking at the first 5 entries of the second recording's labels
-    seq = label_df2[label_df2.Type == "end"].Description.to_list()[:5]
+    # Find the checkpoint, at which the split happened, by looking at the first 4 entries of the second recording's labels
+    seq = label_df2[label_df2.Type == "end"].Description.to_list()[:4]
     tl = task_list.TASKS.to_list()
     ind = [i for i in range(len(tl)) if tl[i:i + len(seq)] == seq][0]
     # The last recording should end with these 5 (which were conducted before the checkpoint)
-    end_seq = tl[ind - 6:ind - 1]
+    end_seq = tl[ind - 5:ind - 1]
     labels_1 = label_df1[label_df1.Type == "end"].Description.to_list()
     indices = label_df1[label_df1.Type == "end"].index
     # Match the sequence to an index
@@ -125,8 +125,6 @@ def get_part_datas(ws=10):
                 labels = []
                 for recording in recordings:
                     rec = recording[-4:]
-                    if rec in ["0401"]: # todo
-                        continue
                     if rec[-1] == "4":
                         continue  # don't load last recording for now.
                     try:

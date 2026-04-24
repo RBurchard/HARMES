@@ -24,6 +24,7 @@ def evaluate_models():
     metr_dfs = []
 
     for ws in config["window_sizes"]:
+        print("reading data for window size", ws, "...")
         part_datas = get_part_datas(ws)
         for sensor_config in config["sensor_configs"]:
             s_cfg_str = "+".join(sensor_config)
@@ -31,14 +32,21 @@ def evaluate_models():
             with shelve.open("cache") as shf:
                 try:
                     res = shf[key]
+                    if res == "running":
+                        continue
                 except:
-                    res = run_exp(part_datas, sensor_config)
+                    res = "need_run"
+                    shf[key] = "running"
+            
+            if res == "need_run":
+                res = run_exp(part_datas, sensor_config)
+                with shelve.open("cache") as shf:
                     shf[key] = res
-                metrics, f1_macro = calc_metrics(*res)
-                metr_df = pd.DataFrame(metrics, columns=["F1-Score (macro)", "F1-score (weighted)", "Accuracy", "Participant"])
-                metr_df["window size"] = ws
-                metr_df["sensor_config"] = s_cfg_str
-                metr_dfs.append(metr_df)
+            metrics, f1_macro = calc_metrics(*res)
+            metr_df = pd.DataFrame(metrics, columns=["F1-Score (macro)", "F1-score (weighted)", "Accuracy", "Participant"])
+            metr_df["window size"] = ws
+            metr_df["sensor_config"] = s_cfg_str
+            metr_dfs.append(metr_df)
     full_results_df = pd.concat(metr_dfs)
 
     full_results_df["Participant | Window Size"] = "P" + full_results_df.Participant + " | " + full_results_df[
