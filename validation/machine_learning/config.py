@@ -8,4 +8,4 @@ config = {
     "epochs": 35
 }
 
-base_path = "/home/rb995633/AudioDS/Dataset/Records"
+base_path = "../Records"  # replace with your folder!
