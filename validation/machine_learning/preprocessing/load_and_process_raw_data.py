@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
 from copy import copy
+import pickle
 
 feature_cols = ["acc_" + x for x in "xyz"] + ["gyro_" + x for x in "xyz"]
 
@@ -106,9 +107,50 @@ def handle_split_recordings(rec1, rec2):
     return (df1, df2, ad, label_df), load_one_recording(rec2)
 
 
+
+def run_export():
+    # this will load all recordings into memory and store the result in a pkl file
+    all_data = dict()
+    print("Exporting all data to pickle file: dataset.pkl.xz")
+    print("basepath", base_path)
+    # columns to use for the pickle export:
+    timestamp_col = "ts_sync"
+    imu_cols = ["acc_" + d for d in "xyz"] + ["gyro_" + d for d in "xyz"]
+    bme_cols = ["press", "temp", "humid"]
+    imu_df_cols = imu_cols + [timestamp_col]
+    bme_df_cols = bme_cols + [timestamp_col]
+    for j, part_path in enumerate(tqdm(sorted(get_participants(base_path)))):
+        part_rec_list = []
+        part = part_path[-2:]
+        recordings = get_recordings(part_path)
+        datas = []
+        labels = []
+        for recording in recordings:
+            rec = recording[-4:]
+            try:
+                df, df2, ad, label_df = load_one_recording(recording)
+                rec_dict = {"IMU_L" : df[imu_df_cols], "IMU_R": df2[imu_df_cols],
+                        "Audio" : ad, "BME280" : df[bme_df_cols], "Labels": label_df, "rec_id" : rec}
+                part_rec_list.append(rec_dict)
+            except Exception as e:
+                rec1 = recording + "/" + recording[-4:] + "01"
+                rec2 = recording + "/" + recording[-4:] + "02"
+                print("recordings: ", rec1, rec2)
+                r1, r2 = handle_split_recordings(rec1, rec2)
+                for i, (df, df2, ad, label_df) in enumerate([r1, r2]):
+                    rec_dict = {"IMU_L" : df[imu_df_cols], "IMU_R": df2[imu_df_cols],
+                            "Audio" : ad, "BME280" : df[bme_df_cols], "Labels": label_df, "rec_id" : rec + ["01", "02"][i]}
+                    part_rec_list.append(rec_dict)
+         
+                print("split data combined successfully")
+        all_data[part] = part_rec_list
+    with open("AudioDS/dataset.pkl", "wb") as f:
+        pickle.dump(all_data, f)
+        print("Saved in dataset.pkl")
+
 def get_part_datas(ws=10):
     with shelve.open("cache") as shf:
-        key = f"part_datas_{ws}"
+ p install zstd.       key = f"part_datas_{ws}"
         try:
             part_datas = shf[key]
             print("loaded from shelf")
