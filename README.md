@@ -1,8 +1,6 @@
 # HARMES
 Official Code and Support Repository for the HARMES dataset
 
-[![CC BY-NC-SA 4.0][cc-by-nc-sa-shield]][cc-by-nc-sa]
-
 (This repository is anonymized while our paper is still under review. After acceptance, it will be fully de-anonymized.)
 
 HARMES is a multi-modal dataset for human activity recognition (HAR), comprised of 20 participants conducting 15 activities of daily living (ADLs). 61 hours of it are fully labeled, and we include 1 additional hour of other, free-form, mostly labeled activities on top (total: 20h).
