@@ -150,7 +150,7 @@ def run_export():
 
 def get_part_datas(ws=10):
     with shelve.open("cache") as shf:
- p install zstd.       key = f"part_datas_{ws}"
+        key = f"part_datas_{ws}"
         try:
             part_datas = shf[key]
             print("loaded from shelf")
