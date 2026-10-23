@@ -2,10 +2,13 @@
 config = {
     "window_sizes": [5, 10],
     "sensor_configs": [["all"], ["imu_l"], ["imu_r"], ["imu_l", "imu_r"], ["a"], ["imu_r", "a"], ["imu_l", "imu_r", "a"],
-                       ["a", "h"], ["imu_l", "imu_r", "h"]],
+                       ["a", "h"], ["imu_l", "imu_r", "h"], ["h"]],
     ### training:
     "batch_size": 32,
-    "epochs": 35
+    "epochs": 35,
+    "experiment_repetitions": 5,
 }
 
-base_path = "../Records"  # replace with your folder!
+base_path = "./AudioDS/HARMES"
+
+samosa_path = "./SamosaData"

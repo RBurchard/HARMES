@@ -106,6 +106,7 @@ packaging @ file:///home/task_176104885106445/conda-bld/packaging_1761049078006/
 pandas==3.0.1
 pandocfilters==1.5.1
 parso==0.8.6
+patsy==1.0.2
 pexpect==4.9.0
 pillow==12.1.1
 platformdirs==4.9.4
@@ -146,6 +147,8 @@ soupsieve==2.8.3
 soxr==1.0.0
 spake2==0.9
 stack-data==0.6.3
+statsmodels==0.14.6
+svgwrite==1.4.3
 sympy==1.13.1
 tensorboard==2.20.0
 tensorboard-data-server==0.7.2

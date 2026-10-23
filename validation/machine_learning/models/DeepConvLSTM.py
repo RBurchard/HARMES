@@ -23,9 +23,9 @@ class DeepConvLSTM(nn.Module):
 
     def forward(self, x):
         """
-        x: (B, T, 6)
+        x: (B, T, n_channels)
         """
-        x = x.permute(0, 2, 1)  # (B, 6, T)
+        x = x.permute(0, 2, 1)  # (B, n_channels, T)
 
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))

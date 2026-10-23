@@ -1,25 +1,30 @@
-from HARMES.evaluation.evaluation import evaluate_models
+from HARMES.evaluation.evaluation import evaluate_models, evaluate_transfer, evaluate_modality_transfer, evaluate_envs, evaluate_humid_only
 from HARMES.preprocessing.load_and_process_raw_data import run_export
-import sys
+
+import argparse
 
 
-
-def main(do_eval=True, do_export=False):
-    if do_eval:
+def main(pretrain=False, modality_transfer=False, env=False, humidity=False, do_export=False):
+    if pretrain:
+        evaluate_transfer()
+    elif modality_transfer:
+        evaluate_modality_transfer()
+    elif env:
+        evaluate_envs()
+    elif humidity:
+        evaluate_humid_only()
+    elif not do_export:
         evaluate_models()
     if do_export:
         run_export()
 
 
 if __name__ == "__main__":
-    #### stupidly parse command line arguments.
-    # defaults
-    do_eval = True
-    do_export = False
-    if len(sys.argv) > 1:
-        if "--no-eval" in sys.argv:
-            do_eval = False
-        if "--export" in sys.argv:
-            do_export = True
-   
-    main(do_eval=do_eval, do_export=do_export)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--pretrain', action='store_true')
+    parser.add_argument('-m', '--modality_transfer', action='store_true')
+    parser.add_argument('-e', '--environment', action='store_true')
+    parser.add_argument('-u', '--humidity', action='store_true')
+    parser.add_argument('-s', '--export', action='store_true')
+    args = parser.parse_args()
+    main(args.pretrain, args.modality_transfer, args.environment, args.humidity, args.export)

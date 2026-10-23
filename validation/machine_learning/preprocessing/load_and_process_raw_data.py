@@ -1,4 +1,4 @@
-from ..config import base_path
+from ..config import base_path, samosa_path
 from .extract_all_features import *
 
 from glob import glob
@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
 from copy import copy
+import librosa
 import pickle
 
 feature_cols = ["acc_" + x for x in "xyz"] + ["gyro_" + x for x in "xyz"]
@@ -38,7 +39,7 @@ def get_recordings(part_path):
     return glob(part_path + "/*")
 
 
-def load_one_recording(recording):
+def load_one_recording(recording, audio_sr=44100):
     scaler = StandardScaler()
     label_df = pd.read_csv(get_labels(recording))
     label_df = clean_label_df(label_df)
@@ -68,6 +69,13 @@ def load_one_recording(recording):
     af = get_audio(recording)
     ad = af["audio"]
     ad = np.array(ad).astype(np.float32) / 32768.0
+    if audio_sr != 44100:
+        ad = librosa.resample(
+            ad,
+            orig_sr=44100,
+            target_sr=audio_sr,
+        )
+
 
     return df, df2, ad, label_df
 
@@ -79,13 +87,13 @@ def clean_label_df(label_df):
     return label_df
 
 
-def handle_split_recordings(rec1, rec2):
+def handle_split_recordings(rec1, rec2, audio_sr=44100):
     label_df1 = pd.read_csv(get_labels(rec1))
     label_df1 = clean_label_df(label_df1)
     label_df2 = pd.read_csv(get_labels(rec2))
     task_list = pd.read_csv(glob(rec1 + "/*TASKLIST.csv")[0])
 
-    # Find the checkpoint, at which the split happened, by looking at the first 4 entries of the second recording's labels
+    # Find the checkpoint, at which the split happened, by looking at the first 5 entries of the second recording's labels
     seq = label_df2[label_df2.Type == "end"].Description.to_list()[:4]
     tl = task_list.TASKS.to_list()
     ind = [i for i in range(len(tl)) if tl[i:i + len(seq)] == seq][0]
@@ -100,12 +108,11 @@ def handle_split_recordings(rec1, rec2):
     last_line1 = label_df1.loc[indices[ind]]
     last_ts = last_line1.ts_sync + 1000
 
-    df1, df2, ad, label_df = load_one_recording(rec1)
+    df1, df2, ad, label_df = load_one_recording(rec1, audio_sr=audio_sr)
     df1 = df1[df1.ts_sync < last_ts]
     df2 = df2[df2.ts_sync < last_ts]
-    ad = ad[:int(44100 * last_ts / 1000)]
-    return (df1, df2, ad, label_df), load_one_recording(rec2)
-
+    ad = ad[:int(audio_sr * last_ts / 1000)]
+    return (df1, df2, ad, label_df), load_one_recording(rec2, audio_sr=audio_sr)
 
 
 def run_export():
@@ -141,16 +148,15 @@ def run_export():
                     rec_dict = {"IMU_L" : df[imu_df_cols], "IMU_R": df2[imu_df_cols],
                             "Audio" : ad, "BME280" : df[bme_df_cols], "Labels": label_df, "rec_id" : rec + ["01", "02"][i]}
                     part_rec_list.append(rec_dict)
-         
                 print("split data combined successfully")
         all_data[part] = part_rec_list
     with open("AudioDS/dataset.pkl", "wb") as f:
         pickle.dump(all_data, f)
         print("Saved in dataset.pkl")
 
-def get_part_datas(ws=10):
+def get_part_datas(ws=10, audio_sr = 44100):
     with shelve.open("cache") as shf:
-        key = f"part_datas_{ws}"
+        key = f"part_datas_{ws}_{audio_sr}"
         try:
             part_datas = shf[key]
             print("loaded from shelf")
@@ -170,8 +176,8 @@ def get_part_datas(ws=10):
                     if rec[-1] == "4":
                         continue  # don't load last recording for now.
                     try:
-                        df, df2, ad, label_df = load_one_recording(recording)
-                        cur_data, lab = window_data_single(part + "_" + rec[-2:], df, df2, label_df, ad, ws, ws)
+                        df, df2, ad, label_df = load_one_recording(recording, audio_sr=audio_sr)
+                        cur_data, lab = window_data_single(part + "_" + rec[-2:], df, df2, label_df, ad, ws, ws, audio_sr=audio_sr)
                         datas.append(cur_data)
                         labels.append(lab)
                     except Exception as e:
@@ -179,18 +185,20 @@ def get_part_datas(ws=10):
                         rec1 = recording + "/" + recording[-4:] + "01"
                         rec2 = recording + "/" + recording[-4:] + "02"
                         print("recordings: ", rec1, rec2)
-                        r1, r2 = handle_split_recordings(rec1, rec2)
+                        r1, r2 = handle_split_recordings(rec1, rec2, audio_sr=audio_sr)
                         for df, df2, ad, label_df in [r1, r2]:
                             print(df.shape, df2.shape, len(ad), label_df.shape)
-                            cur_data, lab = window_data_single(part + "_" + rec[-2:], df, df2, label_df, ad, ws, ws)
+                            cur_data, lab = window_data_single(part + "_" + rec[-2:], df, df2, label_df, ad, ws, ws, audio_sr=audio_sr)
                             datas.append(cur_data)
                             labels.append(lab)
                         print("split data combined successfully")
                 for d, l in tqdm(zip(datas, labels), total=len(labels)):
                     sub_d = part_datas.get(part, [[], [], [], [], []])
-                    new = [extract_log_mel_spectrogram_sliding_window(x, 44100, ws, ws)[0][0] for x in d[2] if
-                           len(x) == 44100 * ws]
+                    n_fft = {44100: 2048, 1000: 128}[audio_sr]   # todo: argue, confirm, adapt?
+                    new = [extract_log_mel_spectrogram_sliding_window(x, audio_sr, ws, ws, n_fft=n_fft)[0][0] for x in d[2] if
+                           len(x) == audio_sr * ws]
                     humid = [humid_features(x) for x in d[3] if len(x) == 50 * ws]
+                    # humid = [x for x in d[3] if len(x) == 50 * ws]  # only used if dclsmt used for humid, not by us currently!
                     min_len = min((len(new), len(d[0]), len(d[1]), len(d[2]), len(d[3]), len(d[1])))
                     sub_d[0].extend(d[0][:min_len])
                     sub_d[1].extend(d[1][:min_len])
@@ -236,7 +244,7 @@ def window_data(puck_dfs, watch_dfs, label_dfs, audios, order, window_size=10, w
     return data, order
 
 
-def window_data_single(part_rec, puck, watch, labels, audio, window_size=10, window_shift=10):
+def window_data_single(part_rec, puck, watch, labels, audio, window_size=10, window_shift=10, audio_sr=44100):
     cur_data = [[], [], [], []]
     lab = []
 
@@ -262,7 +270,7 @@ def window_data_single(part_rec, puck, watch, labels, audio, window_size=10, win
         p = puck[(puck.ts_sync >= start_time)&(puck.ts_sync< end_time)][["acc_" + x for x in "xyz"] + ["gyro_" + x for x in "xyz"]].to_numpy()
         w = watch[(watch.ts_sync >= start_time )&(watch.ts_sync< end_time)][["acc_" + x for x in "xyz"]  + ["gyro_" + x for x in "xyz"]].to_numpy()
         l = majority_label(intervals, start_time, end_time)
-        a = audio[int(start_time * 44.1):int(end_time * 44.1)]
+        a = audio[int(start_time * audio_sr / 1000.0):int(end_time * audio_sr / 1000.0)]
         h = puck[(puck.ts_sync >= start_time)&(puck.ts_sync< end_time)]["humid"].to_numpy()
 
         assert len(p) == len(w) == len(h)
@@ -273,3 +281,62 @@ def window_data_single(part_rec, puck, watch, labels, audio, window_size=10, win
         cur_data[3].append(h)
         lab.append(l)
     return cur_data, lab
+
+def load_samosa(ws=5):
+    filelist = glob( samosa_path + "/*.pkl")
+    scaler = StandardScaler()
+
+    participants = []
+    participant_datas = {}
+    # TODO: make sure data is z score normalized
+    def window_data_samosa(imu, audio, label, window_size=ws, window_shift=ws, khzaudio=None):
+        # imu : 50 hz
+        # audio: 16000 hz
+        len_s = int(min(len(imu) / 50, len(audio) / 16000))
+
+        imu = imu[:len_s * 50, :6]
+        audio = audio[:len_s * 16000][::16000 // 1000]  # audio "downsampled" to 1000 Hz like in the original paper
+        if khzaudio is not None:  # special case: pre-downsampled audio to 1kHz
+            audio = khzaudio
+        imu = scaler.fit_transform(imu)
+
+        ## window imu data
+        imu_windows = []
+        for start in range(0, len(imu) - window_size * 50, window_shift * 50):
+            if len(imu[start:start + window_size * 50]) == window_size * 50:
+                imu_windows.append(imu[start:start + window_size * 50])
+        imu_windows = np.stack(imu_windows)
+
+        ## window audio data
+        audio_windows = extract_log_mel_spectrogram_sliding_window(audio.astype("float"), 1000, window_size,
+                                                                   window_shift, n_fft=128)[0]
+        audio_windows = audio_windows[:len(imu_windows)]
+
+        labels = np.full(len(imu_windows), label)
+        return imu_windows, audio_windows, labels
+
+
+    e_count = 0
+    for fname in filelist:
+        with open(fname, "rb") as f:
+            fdata = pickle.load(f)
+            participant, category, activity, _ = fname.split("---")
+            p_data = participant_datas.get(participant, [[], [], []])
+            try:
+                if "1kHz_Audio" in list(fdata.keys()):
+                    r = window_data_samosa(fdata["IMU"], fdata["Audio"], activity, ws, ws,
+                                           khzaudio=fdata["1kHz_Audio"])
+                else:
+                    r = window_data_samosa(fdata["IMU"], fdata["Audio"], activity, ws, ws)
+
+                p_data[0].extend(r[0])
+                p_data[1].extend(r[1])
+                p_data[2].extend(r[2])
+                participant_datas[participant] = p_data
+            except Exception as e:
+                print(e)
+                print("skipping ", participant, category, activity, _, "due to error, length (s):", len(fdata["IMU"])/ 50)
+                e_count += 1
+    print("loading error count:", e_count)
+
+    return participant_datas

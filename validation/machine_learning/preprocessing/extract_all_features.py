@@ -142,3 +142,4 @@ def majority_label(intervals, start_time, end_time):
 
 
 humid_feature_dim = len(humid_features(np.zeros(500)))
+# humid_feature_dim = 128
